@@ -1,5 +1,7 @@
 aiogram>=3.4.1
-yt-dlp>=2024.3.10
+yt-dlp[default]>=2024.3.10
+yt-dlp-ejs>=0.8.0
+pycryptodomex>=3.23.0
 pytubefix>=10.11.0
 python-dotenv>=1.0.1
 curl-cffi>=0.7.0
