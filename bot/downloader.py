@@ -16,31 +16,43 @@ def _is_youtube_url(url: str) -> bool:
 
 def _download_youtube(url: str) -> Dict[str, Any]:
     """
-    Скачивание с YouTube с использованием pytubefix (обходит блокировки 429).
+    Попытка скачивания с YouTube через pytubefix с перебором клиентов.
     """
     logger.info(f"Загрузка с YouTube через pytubefix: {url}")
-    yt = YouTube(url, client='WEB')
     
-    # Сначала пытаемся получить комбинированный поток mp4 с видео и звуком
-    stream = yt.streams.filter(progressive=True, file_extension='mp4').get_highest_resolution()
-    if not stream:
-        # Резервный вариант — наилучший любой доступный поток
-        stream = yt.streams.get_highest_resolution()
-        
-    filepath = stream.download(output_path=DOWNLOAD_DIR)
+    clients_to_try = [None, 'ANDROID', 'IOS', 'MWEB']
+    last_exc = None
     
-    return {
-        "filepath": filepath,
-        "title": yt.title or "YouTube Video",
-        "duration": yt.length,
-        "width": None,
-        "height": None,
-        "uploader": yt.author,
-    }
+    for client in clients_to_try:
+        try:
+            if client:
+                yt = YouTube(url, client=client)
+            else:
+                yt = YouTube(url)
+                
+            stream = yt.streams.filter(progressive=True, file_extension='mp4').get_highest_resolution()
+            if not stream:
+                stream = yt.streams.get_highest_resolution()
+                
+            if stream:
+                filepath = stream.download(output_path=DOWNLOAD_DIR)
+                return {
+                    "filepath": filepath,
+                    "title": yt.title or "YouTube Video",
+                    "duration": yt.length,
+                    "width": None,
+                    "height": None,
+                    "uploader": yt.author,
+                }
+        except Exception as e:
+            logger.warning(f"pytubefix с клиентом {client} не сработал: {e}")
+            last_exc = e
+
+    raise ValueError(f"pytubefix не смог скачать видео: {last_exc}")
 
 def _download_ytdlp(url: str) -> Dict[str, Any]:
     """
-    Скачивание с Instagram / TikTok через yt-dlp.
+    Скачивание через yt-dlp (для Instagram/TikTok и как резевр для YouTube).
     """
     output_template = os.path.join(DOWNLOAD_DIR, "%(id)s.%(ext)s")
     
@@ -51,7 +63,11 @@ def _download_ytdlp(url: str) -> Dict[str, Any]:
         'quiet': True,
         'no_warnings': True,
         'merge_output_format': 'mp4',
-        'impersonate': 'chrome',
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'mweb']
+            }
+        }
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -89,7 +105,7 @@ def _download_with_ytdlp(url: str) -> Dict[str, Any]:
         try:
             return _download_youtube(url)
         except Exception as e:
-            logger.warning(f"pytubefix ошибка: {e}, пробование резервного yt-dlp")
+            logger.warning(f"pytubefix не удался ({e}), переход на yt-dlp...")
             return _download_ytdlp(url)
     else:
         return _download_ytdlp(url)
