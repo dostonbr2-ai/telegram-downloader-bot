@@ -66,7 +66,17 @@ async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     
     try:
-        await dp.start_polling(bot)
+        from aiogram.exceptions import TelegramConflictError
+        import asyncio
+        
+        # Retry logic for Render zero-downtime deploys
+        for attempt in range(5):
+            try:
+                await dp.start_polling(bot)
+                break
+            except TelegramConflictError:
+                logging.warning(f"Конфликт Telegram API (попытка {attempt + 1}/5). Ждем 5 секунд...")
+                await asyncio.sleep(5)
     finally:
         await bot.session.close()
 
