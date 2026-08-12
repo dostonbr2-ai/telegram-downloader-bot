@@ -77,7 +77,8 @@ async def handle_url(message: Message):
             "Возможные причины:\n"
             "• Видео является приватным или было удалено.\n"
             "• Размер видео превышает 50 МБ.\n"
-            "• Неподдерживаемая ссылка."
+            "• Неподдерживаемая ссылка.\n\n"
+            f"🛠 **Детали ошибки (для разработчика):**\n`{str(e)}`"
         )
         await status_msg.edit_text(error_text, parse_mode="Markdown")
     finally:
