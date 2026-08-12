@@ -1,4 +1,5 @@
 aiogram>=3.4.1
 yt-dlp>=2024.3.10
+pytubefix>=10.11.0
 python-dotenv>=1.0.1
 curl-cffi>=0.7.0
