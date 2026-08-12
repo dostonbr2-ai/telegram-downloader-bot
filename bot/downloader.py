@@ -16,20 +16,16 @@ def _is_youtube_url(url: str) -> bool:
 
 def _download_youtube(url: str) -> Dict[str, Any]:
     """
-    Попытка скачивания с YouTube через pytubefix с перебором клиентов.
+    Попытка скачивания с YouTube через pytubefix с автоперебором всех рабочих клиентом.
     """
     logger.info(f"Загрузка с YouTube через pytubefix: {url}")
     
-    clients_to_try = [None, 'ANDROID', 'IOS', 'MWEB']
+    clients = ['IOS', 'ANDROID', 'MWEB', None]
     last_exc = None
     
-    for client in clients_to_try:
+    for client in clients:
         try:
-            if client:
-                yt = YouTube(url, client=client)
-            else:
-                yt = YouTube(url)
-                
+            yt = YouTube(url, client=client) if client else YouTube(url)
             stream = yt.streams.filter(progressive=True, file_extension='mp4').get_highest_resolution()
             if not stream:
                 stream = yt.streams.get_highest_resolution()
@@ -48,11 +44,11 @@ def _download_youtube(url: str) -> Dict[str, Any]:
             logger.warning(f"pytubefix с клиентом {client} не сработал: {e}")
             last_exc = e
 
-    raise ValueError(f"pytubefix не смог скачать видео: {last_exc}")
+    raise ValueError(f"Все клиенты pytubefix не смогли скачать видео: {last_exc}")
 
 def _download_ytdlp(url: str) -> Dict[str, Any]:
     """
-    Скачивание через yt-dlp (для Instagram/TikTok и как резевр для YouTube).
+    Скачивание через yt-dlp с эмуляцией мобильных клиентов без параметров impersonate.
     """
     output_template = os.path.join(DOWNLOAD_DIR, "%(id)s.%(ext)s")
     
@@ -65,7 +61,7 @@ def _download_ytdlp(url: str) -> Dict[str, Any]:
         'merge_output_format': 'mp4',
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'ios', 'mweb']
+                'player_client': ['ios', 'android', 'mweb']
             }
         }
     }
