@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  telegram_downloader_bot:
+    build: .
+    container_name: telegram_downloader_bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./downloads:/app/downloads
