@@ -10,45 +10,14 @@ logger = logging.getLogger(__name__)
 
 DOWNLOAD_DIR = os.path.join(os.getcwd(), "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+COOKIES_PATH = os.path.join(os.getcwd(), "cookies.txt")
 
 def _is_youtube_url(url: str) -> bool:
     return "youtube.com" in url or "youtu.be" in url
 
-def _download_youtube(url: str) -> Dict[str, Any]:
-    """
-    Попытка скачивания с YouTube через pytubefix с автоперебором всех рабочих клиентом.
-    """
-    logger.info(f"Загрузка с YouTube через pytubefix: {url}")
-    
-    clients = ['IOS', 'ANDROID', 'MWEB', None]
-    last_exc = None
-    
-    for client in clients:
-        try:
-            yt = YouTube(url, client=client) if client else YouTube(url)
-            stream = yt.streams.filter(progressive=True, file_extension='mp4').get_highest_resolution()
-            if not stream:
-                stream = yt.streams.get_highest_resolution()
-                
-            if stream:
-                filepath = stream.download(output_path=DOWNLOAD_DIR)
-                return {
-                    "filepath": filepath,
-                    "title": yt.title or "YouTube Video",
-                    "duration": yt.length,
-                    "width": None,
-                    "height": None,
-                    "uploader": yt.author,
-                }
-        except Exception as e:
-            logger.warning(f"pytubefix с клиентом {client} не сработал: {e}")
-            last_exc = e
-
-    raise ValueError(f"Все клиенты pytubefix не смогли скачать видео: {last_exc}")
-
 def _download_ytdlp(url: str) -> Dict[str, Any]:
     """
-    Скачивание через yt-dlp с эмуляцией мобильных клиентов без параметров impersonate.
+    Универсальное скачивание через yt-dlp с поддержкой cookies.txt и nodejs.
     """
     output_template = os.path.join(DOWNLOAD_DIR, "%(id)s.%(ext)s")
     
@@ -59,12 +28,11 @@ def _download_ytdlp(url: str) -> Dict[str, Any]:
         'quiet': True,
         'no_warnings': True,
         'merge_output_format': 'mp4',
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['ios', 'android', 'mweb']
-            }
-        }
     }
+
+    if os.path.exists(COOKIES_PATH) and os.path.getsize(COOKIES_PATH) > 0:
+        logger.info(f"Использование файла куки: {COOKIES_PATH}")
+        ydl_opts['cookiefile'] = COOKIES_PATH
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
@@ -96,13 +64,29 @@ def _download_ytdlp(url: str) -> Dict[str, Any]:
         "uploader": info.get("uploader") or info.get("uploader_id"),
     }
 
+def _download_youtube(url: str) -> Dict[str, Any]:
+    """
+    Первичная попытка скачивания через yt-dlp (с куками), при неудаче — pytubefix.
+    """
+    try:
+        return _download_ytdlp(url)
+    except Exception as e:
+        logger.warning(f"yt-dlp не удался ({e}), переход на pytubefix...")
+        yt = YouTube(url)
+        stream = yt.streams.filter(progressive=True, file_extension='mp4').get_highest_resolution() or yt.streams.get_highest_resolution()
+        filepath = stream.download(output_path=DOWNLOAD_DIR)
+        return {
+            "filepath": filepath,
+            "title": yt.title or "YouTube Video",
+            "duration": yt.length,
+            "width": None,
+            "height": None,
+            "uploader": yt.author,
+        }
+
 def _download_with_ytdlp(url: str) -> Dict[str, Any]:
     if _is_youtube_url(url):
-        try:
-            return _download_youtube(url)
-        except Exception as e:
-            logger.warning(f"pytubefix не удался ({e}), переход на yt-dlp...")
-            return _download_ytdlp(url)
+        return _download_youtube(url)
     else:
         return _download_ytdlp(url)
 

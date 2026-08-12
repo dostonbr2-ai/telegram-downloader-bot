@@ -2,6 +2,7 @@ import os
 import asyncio
 import logging
 import sys
+import base64
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -16,7 +17,6 @@ async def health_check(request):
 async def start_web_server():
     """
     Запуск минимального HTTP веб-сервера для удовлетворения Health Check на Render.
-    Это предотвращает задержки и конфликты при пересборке.
     """
     port = int(os.getenv("PORT", 8080))
     app = web.Application()
@@ -27,6 +27,19 @@ async def start_web_server():
     await site.start()
     logging.info(f"Health check web-server запущен на порту {port}")
 
+def init_cookies():
+    """
+    Проверка и декодирование cookies.txt из переменной окружения YOUTUBE_COOKIES_BASE64.
+    """
+    cookies_b64 = os.getenv("YOUTUBE_COOKIES_BASE64")
+    if cookies_b64 and not os.path.exists("cookies.txt"):
+        try:
+            with open("cookies.txt", "wb") as f:
+                f.write(base64.b64decode(cookies_b64))
+            logging.info("Успешно создан cookies.txt из переменной YOUTUBE_COOKIES_BASE64")
+        except Exception as e:
+            logging.error(f"Ошибка декодирования куки из переменной окружения: {e}")
+
 async def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -36,6 +49,9 @@ async def main():
     
     logger = logging.getLogger(__name__)
     logger.info("Запуск Telegram-бота...")
+
+    # Инициализация куки
+    init_cookies()
 
     # Запускаем порт для Render
     await start_web_server()

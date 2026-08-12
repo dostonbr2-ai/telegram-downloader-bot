@@ -1,9 +1,10 @@
 # Используем легкий базовый образ Python
 FROM python:3.11-slim
 
-# Устанавливаем системные зависимости, необходимые для yt-dlp и ffmpeg
+# Устанавливаем системные зависимости: ffmpeg, nodejs (для JS challenge yt-dlp) и ca-certificates
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    nodejs \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
