@@ -15,7 +15,7 @@ COOKIES_PATH = os.path.join(os.getcwd(), "cookies.txt")
 def _is_youtube_url(url: str) -> bool:
     return "youtube.com" in url or "youtu.be" in url
 
-def _download_ytdlp(url: str) -> Dict[str, Any]:
+def _download_ytdlp(url: str, use_cookies: bool = True) -> Dict[str, Any]:
     output_template = os.path.join(DOWNLOAD_DIR, "%(id)s.%(ext)s")
     
     ydl_opts = {
@@ -28,7 +28,7 @@ def _download_ytdlp(url: str) -> Dict[str, Any]:
         'extractor_args': {'youtube': ['player_skip=web,tv,mweb']} # Пропуск клиентов, требующих JS и PO Token
     }
 
-    if os.path.exists(COOKIES_PATH) and os.path.getsize(COOKIES_PATH) > 0:
+    if use_cookies and os.path.exists(COOKIES_PATH) and os.path.getsize(COOKIES_PATH) > 0:
         logger.info(f"Использование файла куки: {COOKIES_PATH}")
         ydl_opts['cookiefile'] = COOKIES_PATH
 
@@ -64,10 +64,12 @@ def _download_ytdlp(url: str) -> Dict[str, Any]:
 
 def _download_youtube(url: str) -> Dict[str, Any]:
     """
-    Скачивание YouTube видео через yt-dlp с пропуском веб-клиентов и использованием куки.
+    Скачивание YouTube видео через yt-dlp с пропуском веб-клиентов. 
+    Мы отключаем куки для YouTube, потому что старые/экспортированные куки 
+    вызывают ошибку 'Sign in to confirm you're not a bot' на серверных IP.
     """
-    logger.info(f"Загрузка с YouTube через yt-dlp: {url}")
-    return _download_ytdlp(url)
+    logger.info(f"Загрузка с YouTube через yt-dlp (без куки): {url}")
+    return _download_ytdlp(url, use_cookies=False)
 
 def _download_with_ytdlp(url: str) -> Dict[str, Any]:
     if _is_youtube_url(url):
