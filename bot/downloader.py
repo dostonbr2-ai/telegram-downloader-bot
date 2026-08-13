@@ -272,14 +272,12 @@ def _download_ytdlp(url: str, use_cookies: bool = True, extra_opts: Optional[Dic
     }
 
 def _download_router(url: str) -> Dict[str, Any]:
-    if _is_youtube_url(url):
-        return _download_youtube(url)
-    elif _is_tiktok_url(url):
+    if _is_tiktok_url(url):
         return _download_tiktok(url)
     elif _is_instagram_url(url):
         return _download_instagram(url)
     else:
-        return _download_ytdlp(url, use_cookies=False)
+        raise ValueError("Поддерживаются только ссылки на Instagram и TikTok.")
 
 async def download_video(url: str) -> Dict[str, Any]:
     """

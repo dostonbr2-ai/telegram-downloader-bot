@@ -13,9 +13,9 @@ router = Router()
 
 import html
 
-# Универсальный регулярный поиск любых медиассылок
+# Универсальный регулярный поиск медиассылок Instagram и TikTok
 URL_EXTRACT_REGEX = re.compile(
-    r"(https?://[^\s]+|(?:[a-zA-Z0-9-]+\.)*(?:instagram\.com|instagr\.am|tiktok\.com|douyin\.com|youtube\.com|youtu\.be)/[^\s]+)",
+    r"(https?://[^\s]+|(?:[a-zA-Z0-9-]+\.)*(?:instagram\.com|instagr\.am|tiktok\.com|douyin\.com)/[^\s]+)",
     re.IGNORECASE
 )
 
@@ -27,8 +27,7 @@ async def cmd_start(message: Message):
         "👋 <b>Привет! Я бот для скачивания видео и фото.</b>\n\n"
         "Отправь мне ссылку из:\n"
         "• 📷 <b>Instagram</b> (Reels, посты)\n"
-        "• 🎵 <b>TikTok</b> (видео без знаков и слайдшоу из фото)\n"
-        "• 🔴 <b>YouTube</b> (Shorts и обычные ролики)\n\n"
+        "• 🎵 <b>TikTok</b> (видео без знаков и слайдшоу из фото)\n\n"
         "Просто отправь ссылку в чат, и я пришлю готовый медиафайл!"
     )
     await message.answer(welcome_text, parse_mode="HTML")
@@ -37,7 +36,7 @@ async def cmd_start(message: Message):
 async def cmd_help(message: Message):
     help_text = (
         "ℹ️ <b>Инструкция по использованию:</b>\n\n"
-        "1. Скопируйте ссылку на видео из Instagram, TikTok или YouTube.\n"
+        "1. Скопируйте ссылку на видео из Instagram или TikTok.\n"
         "2. Вставьте её в чат и нажмите отправить.\n"
         "3. Бот обработает ссылку и пришлет готовый файл!\n\n"
         "⚠️ <i>Ограничение</i>: Telegram Bot API позволяет отправлять файлы до 50 МБ."
@@ -51,7 +50,7 @@ async def handle_text_messages(message: Message):
     match = URL_EXTRACT_REGEX.search(text)
     if not match:
         await message.answer(
-            "🤔 Я понимаю только ссылки на <b>Instagram</b>, <b>TikTok</b> или <b>YouTube</b>.\n"
+            "🤔 Я понимаю только ссылки на <b>Instagram</b> или <b>TikTok</b>.\n"
             "Отправьте мне ссылку на видео!",
             parse_mode="HTML"
         )
