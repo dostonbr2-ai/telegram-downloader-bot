@@ -1,8 +1,9 @@
 import re
+import os
 import logging
 from aiogram import Router, F, types
 from aiogram.filters import CommandStart, Command
-from aiogram.types import FSInputFile, Message
+from aiogram.types import FSInputFile, Message, InputMediaPhoto
 
 from bot.downloader import download_video, remove_file
 
@@ -10,32 +11,34 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-# Универсальное регулярное выражение для поиска ссылок (case-insensitive)
+# Универсальный регулярный поиск любых медиассылок
 URL_EXTRACT_REGEX = re.compile(
-    r"(https?://[^\s]+|(?:[a-zA-Z0-9-]+\.)*(?:instagram\.com|instagr\.am|tiktok\.com|youtube\.com|youtu\.be)/[^\s]+)",
+    r"(https?://[^\s]+|(?:[a-zA-Z0-9-]+\.)*(?:instagram\.com|instagr\.am|tiktok\.com|douyin\.com|youtube\.com|youtu\.be)/[^\s]+)",
     re.IGNORECASE
 )
+
+MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 МБ — лимит Telegram Bot API
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     welcome_text = (
-        "👋 **Привет! Я бот для скачивания видео.**\n\n"
-        "Отправь мне ссылку на видео из:\n"
+        "👋 **Привет! Я бот для скачивания видео и фото.**\n\n"
+        "Отправь мне ссылку из:\n"
         "• 📷 **Instagram** (Reels, посты)\n"
-        "• 🎵 **TikTok** (без водяных знаков)\n"
-        "• 🔴 **YouTube** (Shorts и обычные видео)\n\n"
-        "Просто отправь ссылку в чат, и я пришлю тебе готовый файл!"
+        "• 🎵 **TikTok** (видео без знаков и слайдшоу из фото)\n"
+        "• 🔴 **YouTube** (Shorts и обычные ролики)\n\n"
+        "Просто отправь ссылку в чат, и я пришлю готовый медиафайл!"
     )
     await message.answer(welcome_text, parse_mode="Markdown")
 
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     help_text = (
-        "ℹ️ **Как пользоваться ботом:**\n\n"
-        "1. Скопируй ссылку на видео из Instagram, TikTok или YouTube.\n"
-        "2. Вставь и отправь её мне в сообщение.\n"
-        "3. Подожди несколько секунд — я скачаю видео и пришлю его тебе!\n\n"
-        "⚠️ *Обратите внимание*: Telegram разрешает отправку видеофайлов размером до 50 МБ."
+        "ℹ️ **Инструкция по использованию:**\n\n"
+        "1. Скопируйте ссылку на видео из Instagram, TikTok или YouTube.\n"
+        "2. Вставьте её в чат и нажмите отправить.\n"
+        "3. Бот обработает ссылку и пришлет готовый файл!\n\n"
+        "⚠️ *Ограничение*: Telegram Bot API позволяет отправлять файлы до 50 МБ."
     )
     await message.answer(help_text, parse_mode="Markdown")
 
@@ -43,7 +46,6 @@ async def cmd_help(message: Message):
 async def handle_text_messages(message: Message):
     text = message.text.strip()
     
-    # Ищем ссылку в сообщении с помощью case-insensitive паттерна
     match = URL_EXTRACT_REGEX.search(text)
     if not match:
         await message.answer(
@@ -54,17 +56,60 @@ async def handle_text_messages(message: Message):
         return
 
     url = match.group(0)
-    # Если пользователь прислал ссылку без http/https, добавляем префикс
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
-    status_msg = await message.answer("⏳ **Скачиваю видео...** Пожалуйста, подождите.", parse_mode="Markdown")
+    status_msg = await message.answer("⏳ **Скачиваю медиа...** Пожалуйста, подождите.", parse_mode="Markdown")
     
-    filepath = None
+    target_files_to_clean = None
     try:
         data = await download_video(url)
-        filepath = data["filepath"]
+        res_type = data.get("type", "video")
         
+        # 1. ОБРАБОТКА ФОТО-СЛАЙДШОУ (TikTok Photo Carousel)
+        if res_type == "photos":
+            photo_paths = data.get("filepaths", [])
+            target_files_to_clean = photo_paths
+            
+            if not photo_paths:
+                raise ValueError("Не удалось загрузить фотографии из слайдшоу.")
+                
+            await status_msg.edit_text(f"📤 **Отправляю слайдшоу из {len(photo_paths)} фото...**", parse_mode="Markdown")
+            
+            # Формируем MediaGroup для отправки альбома в Telegram (максимум 10 элементов в одной группе)
+            media_group = []
+            caption = f"🖼 **{data.get('title', 'Слайдшоу TikTok')}**"
+            if data.get("uploader"):
+                caption += f"\n👤 *Автор:* {data['uploader']}"
+                
+            for idx, p_path in enumerate(photo_paths[:10]):
+                photo_file = FSInputFile(p_path)
+                if idx == 0:
+                    media_group.append(InputMediaPhoto(media=photo_file, caption=caption[:1024], parse_mode="Markdown"))
+                else:
+                    media_group.append(InputMediaPhoto(media=photo_file))
+                    
+            await message.answer_media_group(media=media_group)
+            await status_msg.delete()
+            return
+
+        # 2. ОБРАБОТКА ОБЫЧНОГО ВИДЕО
+        filepath = data.get("filepath")
+        target_files_to_clean = filepath
+        
+        if not filepath or not os.path.exists(filepath):
+            raise FileNotFoundError("Скачанный видеофайл отсутствует.")
+            
+        file_size = os.path.getsize(filepath)
+        if file_size > MAX_FILE_SIZE_BYTES:
+            size_mb = round(file_size / (1024 * 1024), 1)
+            await status_msg.edit_text(
+                f"⚠️ **Размер видео превышает 50 МБ ({size_mb} МБ).**\n\n"
+                "Telegram Bot API запрещает отправку файлов крупнее 50 МБ через бота.",
+                parse_mode="Markdown"
+            )
+            return
+
         await status_msg.edit_text("📤 **Загружаю видео в Telegram...**", parse_mode="Markdown")
         
         video_file = FSInputFile(filepath)
@@ -74,14 +119,13 @@ async def handle_text_messages(message: Message):
             
         await message.answer_video(
             video=video_file,
-            caption=caption[:1024],  # Ограничение Telegram на длину подписи
+            caption=caption[:1024],
             parse_mode="Markdown",
             width=data.get("width"),
             height=data.get("height"),
             duration=data.get("duration")
         )
         
-        # Удаляем статусное сообщение после успешной отправки
         await status_msg.delete()
         
     except Exception as e:
@@ -94,7 +138,10 @@ async def handle_text_messages(message: Message):
             "• Неподдерживаемая ссылка.\n\n"
             f"🛠 **Детали ошибки (для разработчика):**\n`{str(e)}`"
         )
-        await status_msg.edit_text(error_text, parse_mode="Markdown")
+        try:
+            await status_msg.edit_text(error_text, parse_mode="Markdown")
+        except Exception:
+            await message.answer(error_text, parse_mode="Markdown")
     finally:
-        if filepath:
-            remove_file(filepath)
+        if target_files_to_clean:
+            remove_file(target_files_to_clean)
