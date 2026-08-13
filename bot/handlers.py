@@ -56,7 +56,7 @@ async def handle_text_messages(message: Message):
         )
         return
 
-    url = match.group(0)
+    url = match.group(0).rstrip("'\".,!?:;)")
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
