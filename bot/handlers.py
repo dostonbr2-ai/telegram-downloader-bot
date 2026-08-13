@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-# Регулярное выражение для поиска ссылок на YouTube, TikTok, Instagram
-URL_REGEX = r"https?://(?:www\.)?(?:instagram\.com|instagr\.am|tiktok\.com|youtube\.com|youtu\.be)/[^\s]+"
+# Регулярное выражение для поиска ссылок на YouTube, TikTok, Instagram (включая vt.tiktok.com, vm.tiktok.com и др.)
+URL_REGEX = r"https?://(?:[a-zA-Z0-9-]+\.)*(?:instagram\.com|instagr\.am|tiktok\.com|youtube\.com|youtu\.be)/[^\s]+"
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
