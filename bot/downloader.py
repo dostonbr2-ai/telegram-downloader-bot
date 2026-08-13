@@ -144,12 +144,37 @@ def _download_tiktok(url: str) -> Dict[str, Any]:
 # ==========================================
 # 2. YOUTUBE MULTI-ENGINE DOWNLOADER
 # ==========================================
+def _download_youtube_pytubefix(url: str) -> Optional[Dict[str, Any]]:
+    """
+    Загрузка YouTube через pytubefix (мгновенно обходит блокировки бота 'Sign in to confirm you're not a bot').
+    """
+    logger.info(f"Загрузка с YouTube через pytubefix: {url}")
+    try:
+        from pytubefix import YouTube
+        yt = YouTube(url)
+        ys = yt.streams.get_highest_resolution()
+        if not ys:
+            ys = yt.streams.filter(progressive=True, file_extension='mp4').first()
+            
+        if ys:
+            filepath = ys.download(output_path=DOWNLOAD_DIR)
+            return {
+                "type": "video",
+                "filepath": filepath,
+                "title": yt.title or "YouTube Video",
+                "duration": int(yt.length) if yt.length else None,
+                "uploader": yt.author,
+            }
+    except Exception as e:
+        logger.warning(f"Сбой pytubefix ({e}), переключаемся на yt-dlp...")
+    return None
+
 def _download_youtube(url: str) -> Dict[str, Any]:
     """
-    Трехуровневый загрузчик YouTube с автоматической нормализацией ссылок и каскадным фоллбеком:
-    Уровень 1: Загрузка с куки и пропуском веб-клиентов.
-    Уровень 2: Загрузка без куки с TLS-имперсонацией Chrome и мобильными клиентами ios/android.
-    Уровень 3: Загрузка без куки с клиентом android_vr.
+    Универсальный многоуровневый загрузчик YouTube:
+    - Первичный движок: pytubefix (автоматический PO Token / PO Client)
+    - Вторичный движок: yt-dlp с куки
+    - Третичный движок: yt-dlp без куки + Chrome impersonate
     """
     logger.info(f"Загрузка с YouTube: {url}")
     
@@ -157,13 +182,18 @@ def _download_youtube(url: str) -> Dict[str, Any]:
     match = re.search(r'(?:v=|\/shorts\/|\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})', url)
     clean_url = f"https://www.youtube.com/watch?v={match.group(1)}" if match else url
     
-    # 1. Попытка с куки
+    # 1. Сначала пробуем pytubefix
+    res = _download_youtube_pytubefix(clean_url)
+    if res:
+        return res
+
+    # 2. Попытка yt-dlp с куки
     try:
         return _download_ytdlp(clean_url, use_cookies=True)
     except Exception as e1:
-        logger.warning(f"YouTube Попытка 1 (с куки) завершилась с ошибкой: {e1}")
+        logger.warning(f"YouTube Попытка yt-dlp (с куки) завершилась с ошибкой: {e1}")
 
-    # 2. Попытка без куки с имперсонацией Chrome
+    # 3. Попытка yt-dlp без куки с имперсонацией Chrome
     try:
         from yt_dlp.networking.impersonate import ImpersonateTarget
         extra_opts = {
@@ -172,9 +202,9 @@ def _download_youtube(url: str) -> Dict[str, Any]:
         }
         return _download_ytdlp(clean_url, use_cookies=False, extra_opts=extra_opts)
     except Exception as e2:
-        logger.warning(f"YouTube Попытка 2 (без куки + Chrome impersonate) завершилась с ошибкой: {e2}")
+        logger.warning(f"YouTube Попытка yt-dlp (без куки + Chrome impersonate) завершилась с ошибкой: {e2}")
 
-    # 3. Попытка 3: Чистый фоллбек без куки
+    # 4. Попытка 4: Чистый фоллбек без куки
     return _download_ytdlp(clean_url, use_cookies=False)
 
 # ==========================================
