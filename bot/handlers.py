@@ -10,8 +10,11 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-# Регулярное выражение для поиска ссылок на YouTube, TikTok, Instagram (включая vt.tiktok.com, vm.tiktok.com и др.)
-URL_REGEX = r"https?://(?:[a-zA-Z0-9-]+\.)*(?:instagram\.com|instagr\.am|tiktok\.com|youtube\.com|youtu\.be)/[^\s]+"
+# Универсальное регулярное выражение для поиска ссылок (case-insensitive)
+URL_EXTRACT_REGEX = re.compile(
+    r"(https?://[^\s]+|(?:[a-zA-Z0-9-]+\.)*(?:instagram\.com|instagr\.am|tiktok\.com|youtube\.com|youtu\.be)/[^\s]+)",
+    re.IGNORECASE
+)
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
@@ -36,14 +39,25 @@ async def cmd_help(message: Message):
     )
     await message.answer(help_text, parse_mode="Markdown")
 
-@router.message(F.text.regexp(URL_REGEX))
-async def handle_url(message: Message):
-    # Поиск ссылки в сообщении
-    match = re.search(URL_REGEX, message.text)
-    if not match:
-        return
+@router.message(F.text)
+async def handle_text_messages(message: Message):
+    text = message.text.strip()
     
+    # Ищем ссылку в сообщении с помощью case-insensitive паттерна
+    match = URL_EXTRACT_REGEX.search(text)
+    if not match:
+        await message.answer(
+            "🤔 Я понимаю только ссылки на **Instagram**, **TikTok** или **YouTube**.\n"
+            "Отправьте мне ссылку на видео!",
+            parse_mode="Markdown"
+        )
+        return
+
     url = match.group(0)
+    # Если пользователь прислал ссылку без http/https, добавляем префикс
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
     status_msg = await message.answer("⏳ **Скачиваю видео...** Пожалуйста, подождите.", parse_mode="Markdown")
     
     filepath = None
@@ -84,11 +98,3 @@ async def handle_url(message: Message):
     finally:
         if filepath:
             remove_file(filepath)
-
-@router.message(F.text)
-async def handle_other_text(message: Message):
-    await message.answer(
-        "🤔 Я понимаю только ссылки на **Instagram**, **TikTok** или **YouTube**.\n"
-        "Отправьте мне ссылку на видео!",
-        parse_mode="Markdown"
-    )
