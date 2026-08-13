@@ -172,17 +172,17 @@ def _download_youtube_pytubefix(url: str) -> Optional[Dict[str, Any]]:
 def _download_youtube(url: str) -> Dict[str, Any]:
     """
     Универсальный многоуровневый загрузчик YouTube:
-    - Первичный движок: pytubefix (автоматический PO Token / PO Client)
+    - Первичный движок: pytubefix на нормализованный URL (автоматический PO Token / PO Client)
     - Вторичный движок: yt-dlp с куки
     - Третичный движок: yt-dlp без куки + Chrome impersonate
     """
     logger.info(f"Загрузка с YouTube: {url}")
     
-    # Нормализуем YouTube Shorts и короткие ссылки в формат watch?v=
+    # Нормализуем YouTube Shorts и короткие ссылки в формат watch?v= ДО отправки в движки
     match = re.search(r'(?:v=|\/shorts\/|\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})', url)
     clean_url = f"https://www.youtube.com/watch?v={match.group(1)}" if match else url
     
-    # 1. Сначала пробуем pytubefix
+    # 1. Сначала пробуем pytubefix на чистый URL
     res = _download_youtube_pytubefix(clean_url)
     if res:
         return res
