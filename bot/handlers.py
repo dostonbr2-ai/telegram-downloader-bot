@@ -117,13 +117,18 @@ async def handle_text_messages(message: Message):
         if data.get("uploader"):
             caption += f"\n👤 *Автор:* {data['uploader']}"
             
+        # Безопасно приводим параметры к int для валидации Pydantic v2 в aiogram 3
+        width = int(float(data["width"])) if data.get("width") is not None else None
+        height = int(float(data["height"])) if data.get("height") is not None else None
+        duration = int(float(data["duration"])) if data.get("duration") is not None else None
+
         await message.answer_video(
             video=video_file,
             caption=caption[:1024],
             parse_mode="Markdown",
-            width=data.get("width"),
-            height=data.get("height"),
-            duration=data.get("duration")
+            width=width,
+            height=height,
+            duration=duration
         )
         
         await status_msg.delete()

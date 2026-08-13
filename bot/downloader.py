@@ -235,9 +235,9 @@ def _download_ytdlp(url: str, use_cookies: bool = True, extra_opts: Optional[Dic
         "type": "video",
         "filepath": final_path,
         "title": info.get("title", "Видео"),
-        "duration": info.get("duration"),
-        "width": info.get("width"),
-        "height": info.get("height"),
+        "duration": int(float(info["duration"])) if info.get("duration") is not None else None,
+        "width": int(float(info["width"])) if info.get("width") is not None else None,
+        "height": int(float(info["height"])) if info.get("height") is not None else None,
         "uploader": info.get("uploader") or info.get("uploader_id"),
     }
 
