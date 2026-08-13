@@ -73,24 +73,25 @@ def _download_youtube(url: str) -> Dict[str, Any]:
 
 def _download_tiktok(url: str) -> Dict[str, Any]:
     """
-    Скачивание TikTok через плагин TikWM API (обходит ограничения на возраст/логин).
+    Скачивание TikTok через плагин TikWM API с использованием curl_cffi и заголовка Referer.
     """
     logger.info(f"Загрузка с TikTok через TikWM API: {url}")
     try:
-        import urllib.request
-        import urllib.parse
-        import json
+        from curl_cffi import requests
         
-        req = urllib.request.Request(
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://www.tiktok.com/'
+        }
+        
+        resp = requests.post(
             'https://www.tikwm.com/api/',
-            data=urllib.parse.urlencode({'url': url, 'hd': 1}).encode('utf-8'),
-            headers={
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-            }
+            data={'url': url, 'hd': 1},
+            headers=headers,
+            timeout=15,
+            impersonate="chrome"
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
+        data = resp.json()
             
         if data.get('code') == 0 and 'data' in data and 'play' in data['data']:
             video_info = data['data']
@@ -98,13 +99,13 @@ def _download_tiktok(url: str) -> Dict[str, Any]:
             if video_url.startswith('/'):
                 video_url = f"https://www.tikwm.com{video_url}"
                 
-            video_id = video_info.get('id', 'tiktok_video')
+            video_id = str(video_info.get('id', 'tiktok_video'))
             filepath = os.path.join(DOWNLOAD_DIR, f"{video_id}.mp4")
             
-            # Скачиваем файл на диск
-            req_video = urllib.request.Request(video_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req_video, timeout=30) as v_resp, open(filepath, 'wb') as out_f:
-                out_f.write(v_resp.read())
+            # Скачиваем файл с CDN TikTok с обязательным заголовком Referer
+            v_resp = requests.get(video_url, headers=headers, timeout=30, impersonate="chrome")
+            with open(filepath, 'wb') as out_f:
+                out_f.write(v_resp.content)
                 
             return {
                 "filepath": filepath,
@@ -112,10 +113,12 @@ def _download_tiktok(url: str) -> Dict[str, Any]:
                 "duration": video_info.get("duration"),
                 "uploader": video_info.get("author", {}).get("nickname") or video_info.get("author", {}).get("unique_id"),
             }
+        else:
+            logger.warning(f"TikWM API вернул ошибку code={data.get('code')}: {data.get('msg')}")
     except Exception as e:
-        logger.warning(f"Сбой TikWM API для TikTok ({e}), переключаемся на yt-dlp...")
+        logger.error(f"Сбой TikWM API ({e}), переключаемся на yt-dlp...")
         
-    return _download_ytdlp(url)
+    return _download_ytdlp(url, use_cookies=False)
 
 def _download_with_ytdlp(url: str) -> Dict[str, Any]:
     if _is_youtube_url(url):
