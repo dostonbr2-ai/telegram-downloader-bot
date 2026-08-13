@@ -71,9 +71,57 @@ def _download_youtube(url: str) -> Dict[str, Any]:
     logger.info(f"Загрузка с YouTube через yt-dlp (без куки): {url}")
     return _download_ytdlp(url, use_cookies=False)
 
+def _download_tiktok(url: str) -> Dict[str, Any]:
+    """
+    Скачивание TikTok через плагин TikWM API (обходит ограничения на возраст/логин).
+    """
+    logger.info(f"Загрузка с TikTok через TikWM API: {url}")
+    try:
+        import urllib.request
+        import urllib.parse
+        import json
+        
+        req = urllib.request.Request(
+            'https://www.tikwm.com/api/',
+            data=urllib.parse.urlencode({'url': url, 'hd': 1}).encode('utf-8'),
+            headers={
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+            }
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            
+        if data.get('code') == 0 and 'data' in data and 'play' in data['data']:
+            video_info = data['data']
+            video_url = video_info['play']
+            if video_url.startswith('/'):
+                video_url = f"https://www.tikwm.com{video_url}"
+                
+            video_id = video_info.get('id', 'tiktok_video')
+            filepath = os.path.join(DOWNLOAD_DIR, f"{video_id}.mp4")
+            
+            # Скачиваем файл на диск
+            req_video = urllib.request.Request(video_url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req_video, timeout=30) as v_resp, open(filepath, 'wb') as out_f:
+                out_f.write(v_resp.read())
+                
+            return {
+                "filepath": filepath,
+                "title": video_info.get("title", "TikTok Video"),
+                "duration": video_info.get("duration"),
+                "uploader": video_info.get("author", {}).get("nickname") or video_info.get("author", {}).get("unique_id"),
+            }
+    except Exception as e:
+        logger.warning(f"Сбой TikWM API для TikTok ({e}), переключаемся на yt-dlp...")
+        
+    return _download_ytdlp(url)
+
 def _download_with_ytdlp(url: str) -> Dict[str, Any]:
     if _is_youtube_url(url):
         return _download_youtube(url)
+    elif "tiktok.com" in url or "tik" in url:
+        return _download_tiktok(url)
     else:
         return _download_ytdlp(url)
 
