@@ -68,8 +68,8 @@ def _download_tiktok_tikwm(url: str) -> Optional[Dict[str, Any]]:
                     "uploader": uploader
                 }
 
-            # Если это обычное видео
-            video_url = vdata.get('play') or vdata.get('wmplay')
+            # Если это обычное видео (приоритет отдаем HD качеству без водяных знаков)
+            video_url = vdata.get('hdplay') or vdata.get('play') or vdata.get('wmplay')
             if video_url:
                 if video_url.startswith('/'):
                     video_url = f"https://www.tikwm.com{video_url}"
@@ -168,7 +168,7 @@ def _download_ytdlp(url: str, use_cookies: bool = True) -> Dict[str, Any]:
     output_template = os.path.join(DOWNLOAD_DIR, "%(id)s.%(ext)s")
     
     ydl_opts = {
-        'format': 'bestvideo[filesize<=48M][ext=mp4]+bestaudio[ext=m4a]/best[filesize<=48M][ext=mp4]/best[filesize<=48M]/best/b',
+        'format': 'bestvideo[filesize<=48M]+bestaudio/best[filesize<=48M]/best/b',
         'outtmpl': output_template,
         'noplaylist': True,
         'quiet': True,
