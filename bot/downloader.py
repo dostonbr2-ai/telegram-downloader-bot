@@ -146,17 +146,43 @@ def _download_tiktok(url: str) -> Dict[str, Any]:
 # ==========================================
 def _download_youtube(url: str) -> Dict[str, Any]:
     """
-    Загрузка с YouTube через yt-dlp с пропуском проблемных веб-клиентов и использованием файла куки.
+    Трехуровневый загрузчик YouTube с автоматической нормализацией ссылок и каскадным фоллбеком:
+    Уровень 1: Загрузка с куки и пропуском веб-клиентов.
+    Уровень 2: Загрузка без куки с TLS-имперсонацией Chrome и мобильными клиентами ios/android.
+    Уровень 3: Загрузка без куки с клиентом android_vr.
     """
     logger.info(f"Загрузка с YouTube: {url}")
-    return _download_ytdlp(url, use_cookies=True)
+    
+    # Нормализуем YouTube Shorts и короткие ссылки в формат watch?v=
+    match = re.search(r'(?:v=|\/shorts\/|\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})', url)
+    clean_url = f"https://www.youtube.com/watch?v={match.group(1)}" if match else url
+    
+    # 1. Попытка с куки
+    try:
+        return _download_ytdlp(clean_url, use_cookies=True)
+    except Exception as e1:
+        logger.warning(f"YouTube Попытка 1 (с куки) завершилась с ошибкой: {e1}")
+
+    # 2. Попытка без куки с имперсонацией Chrome
+    try:
+        from yt_dlp.networking.impersonate import ImpersonateTarget
+        extra_opts = {
+            'impersonate': ImpersonateTarget.from_str('chrome'),
+            'extractor_args': {'youtube': ['player_client=ios,android']}
+        }
+        return _download_ytdlp(clean_url, use_cookies=False, extra_opts=extra_opts)
+    except Exception as e2:
+        logger.warning(f"YouTube Попытка 2 (без куки + Chrome impersonate) завершилась с ошибкой: {e2}")
+
+    # 3. Попытка 3: Чистый фоллбек без куки
+    return _download_ytdlp(clean_url, use_cookies=False)
 
 # ==========================================
 # 3. INSTAGRAM MULTI-ENGINE DOWNLOADER
 # ==========================================
 def _download_instagram(url: str) -> Dict[str, Any]:
     """
-    Загрузка с Instagram через yt-dlp с использованием curl_cffi имперсонации и куки (если есть).
+    Загрузка с Instagram через yt-dlp с использованием куки.
     """
     logger.info(f"Загрузка с Instagram: {url}")
     return _download_ytdlp(url, use_cookies=True)
@@ -164,7 +190,7 @@ def _download_instagram(url: str) -> Dict[str, Any]:
 # ==========================================
 # 4. UNIVERSAL YT-DLP CORE ENGINE
 # ==========================================
-def _download_ytdlp(url: str, use_cookies: bool = True) -> Dict[str, Any]:
+def _download_ytdlp(url: str, use_cookies: bool = True, extra_opts: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     output_template = os.path.join(DOWNLOAD_DIR, "%(id)s.%(ext)s")
     
     ydl_opts = {
@@ -176,6 +202,9 @@ def _download_ytdlp(url: str, use_cookies: bool = True) -> Dict[str, Any]:
         'merge_output_format': 'mp4',
         'extractor_args': {'youtube': ['player_skip=web,tv,mweb']} # Игнорируем блокирующиеся клиенты YouTube
     }
+
+    if extra_opts:
+        ydl_opts.update(extra_opts)
 
     if use_cookies and os.path.exists(COOKIES_PATH) and os.path.getsize(COOKIES_PATH) > 0:
         logger.info(f"Использование файла куки для {url}: {COOKIES_PATH}")
